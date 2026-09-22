@@ -1,0 +1,1220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>贪吃蛇 · 影子进化</title>
+<style>
+:root{
+  --bg:#070b14;
+  --panel:rgba(14,22,38,.74);
+  --line:rgba(120,180,255,.16);
+  --accent:#38f8b0;
+  --gold:#fbbf24;
+  --purple:#a78bfa;
+  --text:#e6f1ff;
+  --muted:#8ba0bd;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  min-height:100%;
+  background:
+    radial-gradient(1100px 620px at 18% -12%, #12233c 0%, transparent 62%),
+    radial-gradient(900px 600px at 112% 112%, #1b1436 0%, transparent 58%),
+    var(--bg);
+  color:var(--text);
+  font:15px/1.55 "PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  display:flex; align-items:center; justify-content:center;
+  padding:16px;
+  -webkit-tap-highlight-color:transparent;
+}
+.wrap{width:min(920px,100%); display:flex; flex-direction:column; gap:10px}
+
+/* ---------- 顶部状态栏 ---------- */
+.hud{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap}
+.brand{font-weight:800; letter-spacing:.14em; font-size:14px; color:var(--accent); white-space:nowrap}
+.brand span{
+  margin-left:8px; padding:2px 8px; border-radius:999px; letter-spacing:.06em;
+  font-size:11px; font-weight:600; color:#04140f;
+  background:linear-gradient(120deg,#38f8b0,#7cf0ff);
+}
+.stats{display:flex; gap:8px; flex-wrap:wrap}
+.stat{
+  min-width:74px; padding:6px 11px; border-radius:12px;
+  background:var(--panel); border:1px solid var(--line);
+  backdrop-filter:blur(8px);
+}
+.stat label{display:block; font-size:10px; letter-spacing:.16em; color:var(--muted); text-transform:uppercase}
+.stat b{display:block; font:700 20px/1.15 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#score{color:var(--accent)}
+#len{color:#7dd3fc}
+
+/* ---------- 棋盘 ---------- */
+.stage{
+  position:relative; width:100%; margin:0 auto; aspect-ratio:672/528;
+  max-width:min(920px,70vh * 1.2727);
+  border-radius:16px; overflow:hidden; box-shadow:0 26px 70px rgba(0,0,0,.6), 0 0 0 1px var(--line);
+}
+canvas{display:block; width:100%; height:100%; background:#080d17; touch-action:none}
+.hudchip{
+  position:absolute; display:flex; gap:7px; align-items:center;
+  padding:7px 10px; border-radius:12px; font-size:12px; font-weight:700;
+  background:rgba(6,11,20,.72); border:1px solid var(--line); backdrop-filter:blur(6px);
+  pointer-events:none;
+}
+#combo{top:10px; left:10px; color:var(--gold); opacity:0; transition:opacity .18s}
+#combo.on{opacity:1}
+#combo .bar{margin-left:6px; width:52px; height:5px; border-radius:3px; background:rgba(255,255,255,.16); overflow:hidden}
+#combo .bar i{display:block; height:100%; width:100%; background:var(--gold); transform-origin:left}
+#powers{top:10px; right:10px; flex-wrap:wrap; justify-content:flex-end; max-width:70%}
+#powers .p{display:flex; gap:5px; align-items:center; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,.07)}
+#powers .p b{font-variant-numeric:tabular-nums}
+
+/* ---------- 遮罩层 ---------- */
+.overlay{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:12px;
+  padding:22px; text-align:center;
+  background:radial-gradient(600px 400px at 50% 40%, rgba(10,18,32,.82), rgba(4,7,13,.94));
+  backdrop-filter:blur(7px);
+  transition:opacity .2s;
+}
+.overlay.hide{display:none}
+.overlay h1{margin:0; font-size:clamp(22px,4.4vw,34px); letter-spacing:.05em}
+.overlay h1 span{color:var(--accent)}
+.overlay .sub{margin:0; color:var(--muted); font-size:13px}
+.feat{
+  list-style:none; margin:2px 0 0; padding:0; max-width:640px; text-align:left;
+  display:grid; gap:6px;
+}
+.feat li{
+  padding:7px 12px; border-radius:11px; font-size:13px; color:#c9dcf5;
+  background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.07);
+}
+.feat li b{color:var(--accent); margin-right:6px}
+.grid3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; width:min(420px,100%)}
+.grid3 div{padding:9px; border-radius:12px; background:rgba(255,255,255,.05); border:1px solid var(--line)}
+.grid3 label{display:block; font-size:10px; letter-spacing:.16em; color:var(--muted)}
+.grid3 b{font:700 22px/1.2 ui-monospace,Menlo,Consolas,monospace}
+button{
+  margin-top:4px; padding:11px 26px; border:0; border-radius:999px; cursor:pointer;
+  font:700 15px/1 inherit; color:#04140f; letter-spacing:.06em;
+  background:linear-gradient(120deg,#38f8b0,#7cf0ff);
+  box-shadow:0 10px 26px rgba(56,248,176,.28);
+}
+button:active{transform:translateY(1px)}
+.hint{margin:0; color:var(--muted); font-size:12px}
+.newbest{color:var(--gold); font-weight:700}
+
+/* ---------- 底部 ---------- */
+.foot{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; color:var(--muted); font-size:12px}
+.keys kbd{
+  display:inline-block; margin:0 2px; padding:2px 7px; border-radius:7px; font:600 11px/1.6 ui-monospace,Menlo,Consolas,monospace;
+  color:#cfe6ff; background:rgba(255,255,255,.07); border:1px solid var(--line);
+}
+.toggles{display:flex; gap:8px}
+.toggle{
+  padding:6px 12px; border-radius:999px; cursor:pointer; font-size:12px; color:#cfe6ff;
+  background:rgba(255,255,255,.06); border:1px solid var(--line);
+}
+.toggle.off{opacity:.45}
+
+/* ---------- 手机方向键 ---------- */
+.dpad{display:none; grid-template-columns:repeat(3,64px); grid-template-rows:repeat(2,58px); gap:8px; justify-content:center}
+.dpad button{
+  margin:0; padding:0; border-radius:14px; font:700 20px/1 inherit;
+  color:#cfe6ff; background:rgba(255,255,255,.07); border:1px solid var(--line); box-shadow:none;
+}
+.dpad .up{grid-area:1/2} .dpad .left{grid-area:2/1} .dpad .down{grid-area:2/2} .dpad .right{grid-area:2/3}
+@media (hover:none),(max-width:760px){ .dpad{display:grid} .keys{display:none} }
+@media (max-width:640px){ .stat{min-width:62px; padding:5px 9px} .stat b{font-size:17px} .brand span{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="brand">CLASSIC SNAKE<span>影子进化</span></div>
+    <div class="stats">
+      <div class="stat"><label>分数</label><b id="score">0</b></div>
+      <div class="stat"><label>最高</label><b id="best">0</b></div>
+      <div class="stat"><label>等级</label><b id="level">1</b></div>
+      <div class="stat"><label>长度</label><b id="len">3</b></div>
+      <div class="stat"><label>影子</label><b id="ghostscore">—</b></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <canvas id="game" width="672" height="528"></canvas>
+    <div class="hudchip" id="combo">连击 <span id="combomult">x2</span><span class="bar"><i id="combobar"></i></span></div>
+    <div class="hudchip" id="powers"></div>
+    <div class="overlay" id="overlay"></div>
+  </div>
+
+  <div class="foot">
+    <div class="keys">
+      <kbd>↑↓←→</kbd> / <kbd>WASD</kbd> 转向 &nbsp;·&nbsp; <kbd>空格</kbd> 暂停 &nbsp;·&nbsp; <kbd>R</kbd> 重开
+    </div>
+    <div class="toggles">
+      <div class="toggle" id="sound">🔊 音效</div>
+      <div class="toggle" id="walls">🧱 障碍 开</div>
+    </div>
+  </div>
+
+  <div class="dpad">
+    <button class="up" data-dir="up">▲</button>
+    <button class="left" data-dir="left">◀</button>
+    <button class="down" data-dir="down">▼</button>
+    <button class="right" data-dir="right">▶</button>
+  </div>
+</div>
+<script>
+(function () {
+'use strict';
+
+/* ======================= 常量 ======================= */
+const COLS = 28, ROWS = 22, CELL = 24;
+const W = COLS * CELL, H = ROWS * CELL;
+const BASE_STEP = 135;          // 一级时每步毫秒
+const MIN_STEP = 66;            // 最快每步毫秒
+const COMBO_WINDOW = 2600;      // 连击窗口
+const BEST_KEY = 'snake.best.v1';
+const GHOST_KEY = 'snake.ghost.v1';
+const MAX_TRAIL = 4000;         // 影子录像最多记录步数
+
+const DIRS = {
+  up:    { x: 0,  y: -1 },
+  down:  { x: 0,  y: 1  },
+  left:  { x: -1, y: 0  },
+  right: { x: 1,  y: 0  }
+};
+
+const POWERS = {
+  ghost:  { icon: '👻', name: '幽灵',   dur: 6000, color: '#a78bfa' },
+  slow:   { icon: '⏳', name: '慢动作', dur: 6000, color: '#38bdf8' },
+  double: { icon: '✦',  name: '双倍',   dur: 8000, color: '#fbbf24' },
+  magnet: { icon: '🧲', name: '磁铁',   dur: 7000, color: '#f472b6' }
+};
+const POWER_KEYS = Object.keys(POWERS);
+
+/* ======================= 存档 ======================= */
+function readStore(k, fallback) {
+  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function writeStore(k, v) {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 忽略隐私模式 */ }
+}
+let best = readStore(BEST_KEY, 0);
+if (typeof best !== 'number') best = 0;
+let ghostRun = readStore(GHOST_KEY, null);
+if (!ghostRun || !Array.isArray(ghostRun.trail)) ghostRun = null;
+
+/* ======================= 画布 ======================= */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const el = {
+  score: document.getElementById('score'),
+  best: document.getElementById('best'),
+  level: document.getElementById('level'),
+  len: document.getElementById('len'),
+  ghostscore: document.getElementById('ghostscore'),
+  overlay: document.getElementById('overlay'),
+  combo: document.getElementById('combo'),
+  combomult: document.getElementById('combomult'),
+  combobar: document.getElementById('combobar'),
+  powers: document.getElementById('powers'),
+  sound: document.getElementById('sound'),
+  walls: document.getElementById('walls')
+};
+
+function fitCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+}
+fitCanvas();
+window.addEventListener('resize', fitCanvas);
+
+/* ======================= 小工具 ======================= */
+const rnd = n => Math.floor(Math.random() * n);
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const cellKey = (x, y) => x + ',' + y;
+const same = (a, b) => a && b && a.x === b.x && a.y === b.y;
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function roundRect(x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/* ======================= 地图占位 ======================= */
+function occupied(st) {
+  const set = new Set();
+  for (const p of st.snake) set.add(cellKey(p.x, p.y));
+  for (const p of st.walls) set.add(cellKey(p.x, p.y));
+  for (const p of st.portals) set.add(cellKey(p.x, p.y));
+  if (st.food) set.add(cellKey(st.food.x, st.food.y));
+  if (st.power) set.add(cellKey(st.power.x, st.power.y));
+  return set;
+}
+
+// 随机找一个空格；opts.minDist 距蛇头最小曼哈顿距离，opts.forbid=[{x,y,r}]
+function freeCell(st, opts) {
+  opts = opts || {};
+  const taken = occupied(st);
+  const head = st.snake[0];
+  const minDist = opts.minDist || 0;
+  const forbid = opts.forbid || [];
+  const ok = (x, y) => {
+    if (taken.has(cellKey(x, y))) return false;
+    if (Math.abs(x - head.x) + Math.abs(y - head.y) < minDist) return false;
+    for (const f of forbid) {
+      if (Math.abs(x - f.x) + Math.abs(y - f.y) < (f.r || 3)) return false;
+    }
+    return true;
+  };
+  for (let i = 0; i < 500; i++) {
+    const x = rnd(COLS), y = rnd(ROWS);
+    if (ok(x, y)) return { x, y };
+  }
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) if (ok(x, y)) return { x, y };
+  }
+  return null;
+}
+
+function placePortals(st) {
+  const a = freeCell(st, { minDist: 5 });
+  if (!a) return;
+  st.portals = [a];
+  const b = freeCell(st, { minDist: 5, forbid: [{ x: a.x, y: a.y, r: 7 }] });
+  if (!b) { st.portals = []; return; }
+  st.portals = [a, b];
+  st.portalTimer = 16000 + rnd(6000);
+  st.portalPulse = 0;
+}
+
+function spawnFood(st, forceNormal) {
+  const c = freeCell(st, { minDist: 3 });
+  if (!c) { st.food = null; return; }
+  const golden = !forceNormal && st.eaten > 1 && Math.random() < 0.22;
+  st.food = { x: c.x, y: c.y, type: golden ? 'golden' : 'normal', life: golden ? 9000 : Infinity, born: clock };
+}
+
+/* ======================= 游戏状态 ======================= */
+function createGame() {
+  const st = {
+    state: 'ready',              // ready | running | paused | over
+    snake: [],
+    prevSnake: [],
+    dir: DIRS.right,
+    pending: [],
+    grow: 0,
+    food: null,
+    power: null,
+    powerTimer: 5200,
+    portals: [],
+    portalTimer: 18000,
+    portalPulse: 0,
+    walls: [],
+    particles: [],
+    score: 0,
+    eaten: 0,
+    level: 1,
+    combo: 1,
+    comboTimer: 0,
+    comboFlash: 0,
+    powers: { ghost: 0, slow: 0, double: 0, magnet: 0 },
+    acc: 0,
+    stepIndex: 0,
+    trail: [],
+    shake: 0,
+    flash: 0,
+    msg: '',
+    msgTimer: 0,
+    hurt: 0,
+    deathAt: null,
+    wallsOn: true
+  };
+  const cy = Math.floor(ROWS / 2);
+  st.snake = [{ x: 13, y: cy }, { x: 12, y: cy }, { x: 11, y: cy }];
+  st.prevSnake = st.snake.map(p => ({ x: p.x, y: p.y }));
+  placePortals(st);
+  spawnFood(st, true);
+  st.wallsOn = wallsEnabled;
+  return st;
+}
+/* ======================= 运行时变量 ======================= */
+let clock = 0;
+let wallsEnabled = true;
+let game = null;
+let last = performance.now();
+
+/* ======================= 速度 ======================= */
+function stepMsOf(st) {
+  let ms = Math.max(MIN_STEP, BASE_STEP - (st.level - 1) * 8 - Math.floor(st.snake.length / 8) * 3);
+  if (st.powers.slow > 0) ms *= 1.55;
+  return ms;
+}
+
+/* ======================= 粒子 ======================= */
+function burst(cx, cy, color, n, power) {
+  const st = game;
+  if (!st) return;
+  const x = cx * CELL + CELL / 2, y = cy * CELL + CELL / 2;
+  for (let i = 0; i < (n || 12); i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = (30 + Math.random() * 110) * (power || 1);
+    const life = 340 + Math.random() * 420;
+    st.particles.push({
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 18,
+      life, max: life,
+      size: 1.3 + Math.random() * 2.3,
+      color
+    });
+  }
+  if (st.particles.length > 380) st.particles.splice(0, st.particles.length - 380);
+}
+
+function updateParticles(st, dt) {
+  const arr = st.particles;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const p = arr[i];
+    p.life -= dt;
+    if (p.life <= 0) { arr.splice(i, 1); continue; }
+    p.x += p.vx * dt / 1000;
+    p.y += p.vy * dt / 1000;
+    p.vy += 70 * dt / 1000;
+    p.vx *= 0.99;
+  }
+}
+
+/* ======================= 提示文字 ======================= */
+function pushMsg(st, text) {
+  st.msg = text;
+  st.msgTimer = 1500;
+}
+
+/* ======================= 障碍 ======================= */
+function addWall(st) {
+  if (st.walls.length >= 16) return;
+  const head = st.snake[0];
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const horiz = Math.random() < 0.5;
+    const barLen = Math.random() < 0.35 ? 3 : 2;
+    const bx = rnd(COLS), by = rnd(ROWS);
+    const cells = [];
+    let bad = false;
+    for (let k = 0; k < barLen; k++) {
+      const x = bx + (horiz ? k : 0), y = by + (horiz ? 0 : k);
+      if (x >= COLS || y >= ROWS) { bad = true; break; }
+      if (Math.abs(x - head.x) + Math.abs(y - head.y) < 5) { bad = true; break; }
+      cells.push({ x, y });
+    }
+    if (bad) continue;
+    const taken = occupied(st);
+    if (cells.some(c => taken.has(cellKey(c.x, c.y)))) continue;
+    for (const c of cells) st.walls.push(c);
+    return;
+  }
+}
+
+/* ======================= 道具 ======================= */
+function grantPower(st, type) {
+  const def = POWERS[type];
+  st.powers[type] = def.dur;
+  st.flash = 0.55;
+  const h = st.snake[0];
+  burst(h.x, h.y, def.color, 24, 1.2);
+  sfx('power');
+  pushMsg(st, def.icon + ' ' + def.name);
+}
+
+function pullFood(st) {
+  const f = st.food;
+  if (!f) return;
+  const h = st.snake[0];
+  const dx = h.x - f.x, dy = h.y - f.y;
+  if (dx === 0 && dy === 0) return;
+  let tx = f.x, ty = f.y;
+  if (Math.abs(dx) >= Math.abs(dy)) tx += Math.sign(dx);
+  else ty += Math.sign(dy);
+  if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
+  if (tx === h.x && ty === h.y) return;
+  const taken = occupied(st);
+  taken.delete(cellKey(f.x, f.y));
+  if (taken.has(cellKey(tx, ty))) return;
+  f.x = tx; f.y = ty;
+}
+
+/* ======================= 吃 ======================= */
+function eat(st) {
+  const golden = st.food.type === 'golden';
+  const chained = st.comboTimer > 0;
+  st.combo = chained ? Math.min(5, st.combo + 1) : 1;
+  st.comboTimer = COMBO_WINDOW;
+  st.comboFlash = 1;
+  const mult = st.combo * (st.powers.double > 0 ? 2 : 1);
+  const gain = (golden ? 3 : 1) * mult;
+  st.score += gain;
+  st.eaten++;
+  st.grow += golden ? 2 : 1;
+  burst(st.food.x, st.food.y, golden ? '#fbbf24' : '#ff5d73', golden ? 26 : 14, golden ? 1.3 : 1);
+  sfx(golden ? 'golden' : 'eat');
+  if (st.combo > 1) pushMsg(st, '连击 x' + st.combo + '  +' + gain);
+
+  const lv = Math.floor(st.eaten / 5) + 1;
+  if (lv > st.level) {
+    st.level = lv;
+    if (st.wallsOn) { addWall(st); if (lv % 3 === 0) addWall(st); }
+    st.flash = 0.4;
+    pushMsg(st, '等级 ' + lv + ' · 提速');
+  }
+  spawnFood(st, golden);
+}
+
+/* ======================= 影子超越检测 ======================= */
+function checkGhostRace(st) {
+  if (!ghostRun || st.beatGhost) return;
+  if (st.score > ghostRun.score) {
+    st.beatGhost = true;
+    st.flash = 0.5;
+    burst(st.snake[0].x, st.snake[0].y, '#93c5fd', 30, 1.2);
+    pushMsg(st, '🏁 超越影子！');
+    sfx('golden');
+  }
+}
+
+/* ======================= 死亡 ======================= */
+function die(st) {
+  st.state = 'over';
+  st.shake = 16;
+  st.flash = 0.7;
+  const h = st.snake[0];
+  burst(h.x, h.y, '#ff5d73', 42, 1.7);
+  sfx('die');
+  if (st.score > best) {
+    best = st.score;
+    ghostRun = { score: st.score, trail: st.trail.slice(0, MAX_TRAIL) };
+    writeStore(BEST_KEY, best);
+    writeStore(GHOST_KEY, ghostRun);
+    st.newBest = true;
+  }
+  showOverlay();
+}
+
+/* ======================= 单步推进 ======================= */
+function step(st) {
+  /* 消费一次转向指令（保证一帧只转一次，不会自己撞自己） */
+  if (st.pending.length) st.dir = st.pending.shift();
+  const head = st.snake[0];
+  const dir = st.dir;
+  let nx = head.x + dir.x, ny = head.y + dir.y;
+  let wrapped = false;
+  const ghostMode = st.powers.ghost > 0;
+
+  /* 边界：幽灵模式环绕，否则撞墙 */
+  if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) {
+    if (!ghostMode) { die(st); return; }
+    nx = (nx + COLS) % COLS;
+    ny = (ny + ROWS) % ROWS;
+    wrapped = true;
+  }
+
+  /* 虫洞：踩到入口，从另一端出来 */
+  let teleported = false;
+  if (st.portals.length === 2) {
+    const hit = st.portals.find(p => p.x === nx && p.y === ny);
+    if (hit) {
+      const other = st.portals[0] === hit ? st.portals[1] : st.portals[0];
+      nx = other.x; ny = other.y;
+      teleported = true;
+      st.portalPulse = 1;
+      burst(other.x, other.y, '#5eead4', 14);
+      sfx('portal');
+    }
+  }
+
+  /* 自撞（尾巴正在让位的那格不算） */
+  const bodyEnd = st.grow > 0 ? st.snake.length : st.snake.length - 1;
+  let hitSelf = false;
+  for (let i = 0; i < bodyEnd; i++) {
+    if (st.snake[i].x === nx && st.snake[i].y === ny) { hitSelf = true; break; }
+  }
+  const hitWall = st.wallsOn && st.walls.some(p => p.x === nx && p.y === ny);
+
+  if (!ghostMode) {
+    if (hitWall) { die(st); return; }
+    if (hitSelf && !teleported) { die(st); return; }
+  }
+
+  /* 真正移动 */
+  st.prevSnake = st.snake.map(p => ({ x: p.x, y: p.y }));
+  st.snake.unshift({ x: nx, y: ny });
+  if (st.grow > 0) st.grow--; else st.snake.pop();
+  st.stepIndex++;
+  if (st.trail.length < MAX_TRAIL) st.trail.push({ x: nx, y: ny, l: st.snake.length });
+
+  /* 吃果 / 吃道具 / 磁铁 */
+  if (st.food && st.food.x === nx && st.food.y === ny) eat(st);
+  if (st.power && st.power.x === nx && st.power.y === ny) {
+    grantPower(st, st.power.type);
+    st.power = null;
+  }
+  if (st.powers.magnet > 0 && st.stepIndex % 2 === 0) pullFood(st);
+  checkGhostRace(st);
+}
+
+/* ======================= 每帧更新 ======================= */
+function update(st, dt) {
+  for (const k of POWER_KEYS) {
+    if (st.powers[k] > 0) {
+      st.powers[k] = Math.max(0, st.powers[k] - dt);
+      if (st.powers[k] === 0) pushMsg(st, POWERS[k].icon + ' ' + POWERS[k].name + ' 结束');
+    }
+  }
+  if (st.comboTimer > 0) {
+    st.comboTimer -= dt;
+    if (st.comboTimer <= 0) { st.comboTimer = 0; st.combo = 1; }
+  }
+  if (st.comboFlash > 0) st.comboFlash = Math.max(0, st.comboFlash - dt / 500);
+  if (st.msgTimer > 0) { st.msgTimer -= dt; if (st.msgTimer <= 0) st.msg = ''; }
+  if (st.shake > 0) st.shake = Math.max(0, st.shake - dt * 0.035);
+  if (st.flash > 0) st.flash = Math.max(0, st.flash - dt / 520);
+  if (st.portalPulse > 0) st.portalPulse = Math.max(0, st.portalPulse - dt / 520);
+
+  /* 金苹果会过期 */
+  if (st.food && st.food.type === 'golden') {
+    st.food.life -= dt;
+    if (st.food.life <= 0) { st.food.type = 'normal'; st.food.life = Infinity; }
+  }
+
+  /* 虫洞定期重排 */
+  st.portalTimer -= dt;
+  if (st.portalTimer <= 0) placePortals(st);
+
+  /* 道具刷新与过期 */
+  if (st.power) {
+    st.power.life -= dt;
+    if (st.power.life <= 0) st.power = null;
+  } else {
+    st.powerTimer -= dt;
+    if (st.powerTimer <= 0) {
+      const c = freeCell(st, { minDist: 4 });
+      if (c) {
+        st.power = { x: c.x, y: c.y, type: POWER_KEYS[rnd(POWER_KEYS.length)], life: 12000 };
+        st.powerTimer = 9000 + rnd(7000);
+      }
+    }
+  }
+
+  /* 固定步长推进 */
+  const ms = stepMsOf(st);
+  st.acc += dt;
+  let guard = 0;
+  while (st.acc >= ms && st.state === 'running' && guard++ < 4) {
+    st.acc -= ms;
+    step(st);
+    if (st.state !== 'running') { st.acc = 0; break; }
+  }
+  if (st.acc > ms) st.acc = 0;
+}
+/* ======================= 绘制：背景 ======================= */
+let bgGrad = null, glowGrad = null;
+function drawBackdrop() {
+  if (!bgGrad) {
+    bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0b1424');
+    bgGrad.addColorStop(0.55, '#080d18');
+    bgGrad.addColorStop(1, '#0c1020');
+    glowGrad = ctx.createRadialGradient(W / 2, H * 0.45, 40, W / 2, H * 0.45, W * 0.72);
+    glowGrad.addColorStop(0, 'rgba(56,248,176,.06)');
+    glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  }
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawGrid() {
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(120,180,255,.055)';
+  ctx.beginPath();
+  for (let x = 1; x < COLS; x++) { ctx.moveTo(x * CELL + .5, 0); ctx.lineTo(x * CELL + .5, H); }
+  for (let y = 1; y < ROWS; y++) { ctx.moveTo(0, y * CELL + .5); ctx.lineTo(W, y * CELL + .5); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,180,255,.1)';
+  ctx.beginPath();
+  for (let x = 4; x < COLS; x += 4) { ctx.moveTo(x * CELL + .5, 0); ctx.lineTo(x * CELL + .5, H); }
+  for (let y = 4; y < ROWS; y += 4) { ctx.moveTo(0, y * CELL + .5); ctx.lineTo(W, y * CELL + .5); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ======================= 绘制：障碍 ======================= */
+function drawWalls(st) {
+  if (!st.wallsOn) return;
+  ctx.save();
+  for (const w of st.walls) {
+    const x = w.x * CELL + 1.5, y = w.y * CELL + 1.5, s = CELL - 3;
+    ctx.fillStyle = '#334158';
+    roundRect(x, y, s, s, 6);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.09)';
+    roundRect(x + 2.5, y + 2.5, s - 5, s * 0.38, 5);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(148,163,184,.45)';
+    ctx.lineWidth = 1;
+    roundRect(x, y, s, s, 6);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ======================= 绘制：虫洞 ======================= */
+function drawPortal(cx, cy, off, color, pulse) {
+  const base = CELL * 0.4 * (1 + pulse * 0.18);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(clock / 480 + off);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.4;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12 + pulse * 16;
+  ctx.beginPath(); ctx.arc(0, 0, base, 0, Math.PI * 1.35); ctx.stroke();
+  ctx.rotate(Math.PI);
+  ctx.beginPath(); ctx.arc(0, 0, base * 0.62, 0, Math.PI * 1.1); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.2 + pulse * 0.18;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(0, 0, base * 0.82, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawPortals(st) {
+  if (st.portals.length !== 2) return;
+  const a = st.portals[0], b = st.portals[1];
+  const ax = a.x * CELL + CELL / 2, ay = a.y * CELL + CELL / 2;
+  const bx = b.x * CELL + CELL / 2, by = b.y * CELL + CELL / 2;
+  const pulse = st.portalPulse;
+  ctx.save();
+  ctx.setLineDash([5, 9]);
+  ctx.lineDashOffset = -clock / 40;
+  ctx.strokeStyle = 'rgba(94,234,212,.2)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  drawPortal(ax, ay, 0, '#5eead4', pulse);
+  drawPortal(bx, by, Math.PI * 0.6, '#c084fc', pulse);
+  ctx.restore();
+}
+
+/* ======================= 绘制：影子蛇 ======================= */
+function ghostCells(st) {
+  if (!ghostRun || !ghostRun.trail.length) return null;
+  const i = Math.min(st.stepIndex, ghostRun.trail.length - 1);
+  if (i < 0) return null;
+  const head = ghostRun.trail[i];
+  const len = head.l || 3;
+  const cells = [];
+  for (let k = 0; k < len && i - k >= 0; k++) cells.push(ghostRun.trail[i - k]);
+  return cells;
+}
+
+function drawGhost(st) {
+  const cells = ghostCells(st);
+  if (!cells) return;
+  const beaten = st.score > ghostRun.score;
+  ctx.save();
+  ctx.globalAlpha = beaten ? 0.13 : 0.32;
+  for (let i = cells.length - 1; i >= 0; i--) {
+    const p = cells[i];
+    const x = p.x * CELL + 3.5, y = p.y * CELL + 3.5, s = CELL - 7;
+    ctx.fillStyle = '#93c5fd';
+    if (i === 0) { ctx.shadowColor = '#93c5fd'; ctx.shadowBlur = 12; }
+    roundRect(x, y, s, s, 7);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ======================= 绘制：食物与道具 ======================= */
+function starPath(cx, cy, n, outer, inner) {
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const r = (i % 2) ? inner : outer;
+    const a = -Math.PI / 2 + i * Math.PI / n;
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
+
+function drawFood(st) {
+  const f = st.food;
+  if (!f) return;
+  const pulse = 1 + Math.sin(clock / 170) * 0.06;
+  const cx = f.x * CELL + CELL / 2, cy = f.y * CELL + CELL / 2;
+  ctx.save();
+  if (f.type === 'golden') {
+    ctx.shadowColor = 'rgba(251,191,36,.85)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#fbbf24';
+    starPath(cx, cy, 5, CELL * 0.42 * pulse, CELL * 0.18 * pulse);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    const p = clamp(f.life / 9000, 0, 1);
+    ctx.strokeStyle = 'rgba(251,191,36,.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, CELL * 0.62, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
+    ctx.stroke();
+  } else {
+    ctx.shadowColor = 'rgba(255,93,115,.75)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#ff5d73';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 1, CELL * 0.34 * pulse, CELL * 0.33 * pulse, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath();
+    ctx.arc(cx - 3.5, cy - 2.5, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 6);
+    ctx.quadraticCurveTo(cx + 4, cy - 11, cx + 7.5, cy - 8.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPower(st) {
+  const p = st.power;
+  if (!p) return;
+  const def = POWERS[p.type];
+  const cx = p.x * CELL + CELL / 2, cy = p.y * CELL + CELL / 2;
+  const pulse = 1 + Math.sin(clock / 200) * 0.07;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(Math.sin(clock / 700) * 0.1);
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = def.color;
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = 'rgba(8,13,23,.92)';
+  roundRect(-CELL * 0.42, -CELL * 0.42, CELL * 0.84, CELL * 0.84, 9);
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = def.color;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.font = '600 ' + Math.round(CELL * 0.5) + 'px system-ui,"Segoe UI Emoji"';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = def.color;
+  ctx.fillText(def.icon, 0, 1);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = def.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, CELL * 0.66, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.life / 12000, 0, 1));
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ======================= 绘制：蛇 ======================= */
+function snakePoints(st) {
+  const a = st.state === 'running' ? clamp(st.acc / stepMsOf(st), 0, 1) : 1;
+  const prev = st.prevSnake;
+  return st.snake.map((seg, i) => {
+    let from = prev && prev.length ? prev[Math.max(0, i - 1)] : null;
+    if (!from) from = (prev && prev.length) ? prev[prev.length - 1] : seg;
+    if (Math.abs(seg.x - from.x) > 1 || Math.abs(seg.y - from.y) > 1) return { x: seg.x, y: seg.y };
+    return { x: lerp(from.x, seg.x, a), y: lerp(from.y, seg.y, a) };
+  });
+}
+
+function drawEyes(head, dir) {
+  if (!head) return;
+  const cx = head.x * CELL + CELL / 2, cy = head.y * CELL + CELL / 2;
+  const px = -dir.y, py = dir.x;
+  for (const s of [-1, 1]) {
+    const ex = cx + dir.x * 5 + px * 4.6 * s;
+    const ey = cy + dir.y * 5 + py * 4.6 * s;
+    ctx.fillStyle = '#04140f';
+    ctx.beginPath(); ctx.arc(ex, ey, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(ex - 0.8, ey - 0.8, 0.9, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawSnake(st) {
+  const pts = snakePoints(st);
+  const n = Math.max(1, pts.length - 1);
+  ctx.save();
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    const t = i / n;
+    const hue = 152 + t * 46;
+    const light = 62 - t * 18;
+    ctx.fillStyle = 'hsl(' + hue.toFixed(1) + ',85%,' + light.toFixed(1) + '%)';
+    if (i === 0) {
+      ctx.shadowColor = 'rgba(56,248,176,.85)';
+      ctx.shadowBlur = st.powers.ghost > 0 ? 22 : 14;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    roundRect(p.x * CELL + 2, p.y * CELL + 2, CELL - 4, CELL - 4, 8);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  if (st.powers.ghost > 0) {
+    ctx.globalAlpha = 0.35 + Math.sin(clock / 120) * 0.2;
+    ctx.strokeStyle = '#e9d5ff';
+    ctx.lineWidth = 1.4;
+    for (const p of pts) {
+      roundRect(p.x * CELL + 2, p.y * CELL + 2, CELL - 4, CELL - 4, 8);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  drawEyes(pts[0], st.dir);
+  ctx.restore();
+}
+
+function drawParticles(st) {
+  if (!st.particles.length) return;
+  ctx.save();
+  for (const p of st.particles) {
+    const a = clamp(p.life / p.max, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawMsg(st) {
+  if (!st.msg) return;
+  ctx.save();
+  ctx.globalAlpha = clamp(st.msgTimer / 420, 0, 1);
+  ctx.font = '700 20px "PingFang SC","Microsoft YaHei",system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e6f1ff';
+  ctx.shadowColor = 'rgba(0,0,0,.85)';
+  ctx.shadowBlur = 10;
+  ctx.fillText(st.msg, W / 2, 40);
+  ctx.restore();
+}
+
+/* ======================= 绘制：一帧 ======================= */
+function draw() {
+  const st = game;
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+  drawBackdrop();
+  if (st.shake > 0.2) ctx.translate((Math.random() - 0.5) * st.shake, (Math.random() - 0.5) * st.shake);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();
+  drawGrid();
+  drawWalls(st);
+  drawPortals(st);
+  if (st.state !== 'ready') drawGhost(st);
+  drawFood(st);
+  drawPower(st);
+  drawSnake(st);
+  drawParticles(st);
+  drawMsg(st);
+  ctx.restore();
+  if (st.flash > 0.01) {
+    ctx.fillStyle = 'rgba(255,255,255,' + (st.flash * 0.16).toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+}
+/* ======================= 音效 ======================= */
+let actx = null;
+let muted = false;
+
+function ensureAudio() {
+  if (muted) return null;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function tone(freq, dur, type, gain, slideTo) {
+  const a = ensureAudio();
+  if (!a) return;
+  const t0 = a.currentTime;
+  const osc = a.createOscillator();
+  const g = a.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain || 0.05, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(a.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.03);
+}
+
+function sfx(kind) {
+  if (muted) return;
+  if (kind === 'eat') tone(620, 0.1, 'square', 0.05, 940);
+  else if (kind === 'golden') {
+    tone(760, 0.1, 'triangle', 0.07, 1180);
+    setTimeout(() => tone(1180, 0.12, 'triangle', 0.05, 1560), 80);
+  }
+  else if (kind === 'power') tone(320, 0.18, 'sawtooth', 0.05, 900);
+  else if (kind === 'portal') tone(900, 0.12, 'sine', 0.05, 240);
+  else if (kind === 'start') tone(520, 0.12, 'triangle', 0.05, 800);
+  else if (kind === 'die') {
+    tone(320, 0.45, 'sawtooth', 0.08, 60);
+    setTimeout(() => tone(150, 0.35, 'square', 0.05, 50), 90);
+  }
+}
+
+/* ======================= 输入 ======================= */
+function queueDir(name) {
+  const st = game;
+  if (!st || st.state !== 'running') return;
+  const d = DIRS[name];
+  if (!d) return;
+  const ref = st.pending.length ? st.pending[st.pending.length - 1] : st.dir;
+  if (d.x === -ref.x && d.y === -ref.y) return;   // 不能 180 度掉头
+  if (d.x === ref.x && d.y === ref.y) return;     // 同方向忽略
+  if (st.pending.length < 2) st.pending.push(d);
+}
+
+function startRun() {
+  game = createGame();
+  game.state = 'running';
+  last = performance.now();
+  showOverlay();
+  ensureAudio();
+  sfx('start');
+}
+
+function togglePause() {
+  if (game.state === 'running') game.state = 'paused';
+  else if (game.state === 'paused') { game.state = 'running'; last = performance.now(); }
+  showOverlay();
+}
+
+const KEYMAP = {
+  arrowup: 'up', w: 'up',
+  arrowdown: 'down', s: 'down',
+  arrowleft: 'left', a: 'left',
+  arrowright: 'right', d: 'right'
+};
+
+window.addEventListener('keydown', e => {
+  const k = (e.key || '').toLowerCase();
+  if (KEYMAP[k]) { e.preventDefault(); queueDir(KEYMAP[k]); return; }
+  if (k === ' ' || k === 'spacebar') {
+    e.preventDefault();
+    if (game.state === 'ready' || game.state === 'over') startRun();
+    else togglePause();
+    return;
+  }
+  if (k === 'r') { e.preventDefault(); startRun(); return; }
+  if (k === 'm') { toggleSound(); }
+});
+
+/* 触屏：滑动转向 */
+let touchStart = null;
+canvas.addEventListener('pointerdown', e => {
+  touchStart = { x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener('pointerup', e => {
+  if (!touchStart) return;
+  const dx = e.clientX - touchStart.x, dy = e.clientY - touchStart.y;
+  touchStart = null;
+  if (Math.hypot(dx, dy) < 24) {
+    if (game.state === 'paused') togglePause();
+    return;
+  }
+  if (Math.abs(dx) > Math.abs(dy)) queueDir(dx > 0 ? 'right' : 'left');
+  else queueDir(dy > 0 ? 'down' : 'up');
+});
+
+/* 方向键按钮 */
+document.querySelectorAll('.dpad button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (game.state === 'ready' || game.state === 'over') { startRun(); return; }
+    queueDir(btn.dataset.dir);
+  });
+});
+
+/* ======================= 遮罩层 ======================= */
+function readyHTML() {
+  return '<h1>贪吃蛇 <span>影子进化</span></h1>' +
+    '<p class="sub">经典玩法 + 四个新花样</p>' +
+    '<ul class="feat">' +
+      '<li><b>影子竞速</b>你的最高分录像会变成半透明影子蛇，和你同场再跑一遍，超过它即获胜</li>' +
+      '<li><b>虫洞</b>场上刷新成对旋转虫洞，冲进去就从另一头钻出来</li>' +
+      '<li><b>连击</b>2.6 秒内连吃果子，倍率最多叠到 x5，配合双倍道具就是 x10</li>' +
+      '<li><b>道具</b>👻 幽灵穿墙穿身 · ⏳ 慢动作 · ✦ 双倍分 · 🧲 磁铁把果子吸过来</li>' +
+    '</ul>' +
+    '<button data-act="start">开始游戏</button>' +
+    '<p class="hint">方向键 / WASD 转向 · 空格 暂停 · R 重开 · M 静音 · 手机可滑动或点方向键</p>';
+}
+
+function overHTML(st) {
+  const tag = st.newBest
+    ? '<p class="sub newbest">🏆 新纪录！影子录像已更新为这一局</p>'
+    : (ghostRun ? '<p class="sub">影子纪录 ' + ghostRun.score + ' 分，再战一次？</p>' : '<p class="sub">再战一次？</p>');
+  return '<h1>游戏结束</h1>' +
+    '<div class="grid3">' +
+      '<div><label>本局分数</label><b>' + st.score + '</b></div>' +
+      '<div><label>蛇长度</label><b>' + st.snake.length + '</b></div>' +
+      '<div><label>到达等级</label><b>' + st.level + '</b></div>' +
+    '</div>' + tag +
+    '<button data-act="restart">再来一局</button>' +
+    '<p class="hint">按 空格 或 R 也能立即重开</p>';
+}
+
+function showOverlay() {
+  const st = game;
+  const hide = st.state === 'running';
+  el.overlay.classList.toggle('hide', hide);
+  if (hide) { el.overlay.innerHTML = ''; return; }
+  if (st.state === 'paused') {
+    el.overlay.innerHTML = '<h1>已暂停</h1><p class="sub">休息一下，蛇不会跑</p>' +
+      '<button data-act="resume">继续游戏</button><p class="hint">按 空格 继续 · R 重开</p>';
+  } else if (st.state === 'over') {
+    el.overlay.innerHTML = overHTML(st);
+  } else {
+    el.overlay.innerHTML = readyHTML();
+  }
+}
+
+el.overlay.addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const act = btn.dataset.act;
+  if (act === 'start' || act === 'restart') startRun();
+  else if (act === 'resume') togglePause();
+});
+
+/* ======================= 开关 ======================= */
+function toggleSound() {
+  muted = !muted;
+  el.sound.classList.toggle('off', muted);
+  el.sound.textContent = muted ? '🔇 静音' : '🔊 音效';
+  if (!muted) sfx('start');
+}
+
+function toggleWalls() {
+  wallsEnabled = !wallsEnabled;
+  if (game) game.wallsOn = wallsEnabled;
+  syncToggles();
+}
+
+function syncToggles() {
+  el.sound.classList.toggle('off', muted);
+  el.sound.textContent = muted ? '🔇 静音' : '🔊 音效';
+  el.walls.classList.toggle('off', !wallsEnabled);
+  el.walls.textContent = wallsEnabled ? '🧱 障碍 开' : '🧱 障碍 关';
+}
+
+el.sound.addEventListener('click', toggleSound);
+el.walls.addEventListener('click', toggleWalls);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && game.state === 'running') togglePause();
+});
+
+/* ======================= 状态栏 ======================= */
+function powerSig(st) {
+  let s = '';
+  for (const k of POWER_KEYS) if (st.powers[k] > 0) s += k + Math.ceil(st.powers[k] / 1000) + '|';
+  return s;
+}
+
+function syncHud() {
+  const st = game;
+  el.score.textContent = st.score;
+  el.best.textContent = Math.max(best, st.score);
+  el.level.textContent = st.level;
+  el.len.textContent = st.snake.length;
+  el.ghostscore.textContent = ghostRun ? (st.beatGhost ? '已超越' : ghostRun.score) : '—';
+
+  const on = st.combo > 1 && st.comboTimer > 0;
+  el.combo.classList.toggle('on', on);
+  if (on) {
+    el.combomult.textContent = 'x' + st.combo + (st.powers.double > 0 ? ' (双倍)' : '');
+    el.combobar.style.transform = 'scaleX(' + clamp(st.comboTimer / COMBO_WINDOW, 0, 1).toFixed(3) + ')';
+  }
+
+  const sig = powerSig(st);
+  if (el.powers.dataset.sig !== sig) {
+    el.powers.dataset.sig = sig;
+    let html = '';
+    for (const k of POWER_KEYS) {
+      if (st.powers[k] > 0) {
+        const d = POWERS[k];
+        html += '<span class="p" style="color:' + d.color + '">' + d.icon + ' ' + d.name +
+          ' <b>' + Math.ceil(st.powers[k] / 1000) + 's</b></span>';
+      }
+    }
+    el.powers.innerHTML = html;
+  }
+}
+
+/* ======================= 主循环 ======================= */
+function frame(now) {
+  const dt = clamp(now - last, 0, 100);   // 钳制：避免负 dt 或切后台后的时间跳跃
+  last = now;
+  clock += dt;
+  updateParticles(game, dt);
+  if (game.state === 'running') update(game, dt);
+  draw();
+  syncHud();
+  requestAnimationFrame(frame);
+}
+
+/* ======================= 启动 ======================= */
+game = createGame();
+syncToggles();
+showOverlay();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
+
+
+
