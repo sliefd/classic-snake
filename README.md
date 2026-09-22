@@ -1,5 +1,7 @@
 # 贪吃蛇 · 影子进化 (Classic Snake, Reinvented)
 
+**🎮 在线试玩：<https://sliefd.github.io/classic-snake/>**
+
 单文件网页游戏：**原生 JavaScript (ES6) + HTML5 Canvas + CSS**，零依赖、零构建，双击 `index.html` 就能玩。
 
 ![预览](preview.png)
@@ -38,3 +40,4 @@
 # 或者起个本地服务（可选）
 python -m http.server 8000
 ```
+
